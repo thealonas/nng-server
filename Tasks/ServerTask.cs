@@ -8,7 +8,7 @@ public class ServerTask
 {
     private readonly Config _config = ConfigurationManager.Configuration;
     private readonly Func<bool> _finish;
-    protected DataModel Data;
+    protected DataModel Data = null!;
 
     protected ServerTask(Func<bool> finish)
     {

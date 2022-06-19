@@ -1,12 +1,12 @@
 ﻿using nng.Constants;
 using nng.Data;
-using nng.Exceptions;
 using nng.Models;
 using nng.VkFrameworks;
 using nng_server.Configs;
 using nng_server.Logging;
 using VkNet.Enums.SafetyEnums;
 using VkNet.Exception;
+using VkNet.Model.RequestParams;
 
 namespace nng_server.Tasks;
 
@@ -87,9 +87,13 @@ public class EditorServer : ServerTask
             if (IsManager(user.Id)) continue;
             try
             {
-#pragma warning disable CS0618
-                _vkFramework.EditManagerLegacy(user.Id, _group, ManagerRole.Editor);
-#pragma warning restore CS0618
+                VkFrameworkExecution.Execute(() => _vkFramework.Api.Groups.EditManager(new GroupsEditManagerParams
+                {
+                    UserId = user.Id,
+                    GroupId = _group,
+                    Role = ManagerRole.Editor
+                }), false);
+
                 _logger.Log($"Выдали редактора {user}");
             }
             catch (CaptchaNeededException)
@@ -99,7 +103,7 @@ public class EditorServer : ServerTask
                 Thread.Sleep(Constants.CaptchaEditorWaitTime);
                 index--;
             }
-            catch (VkFrameworkMethodException e)
+            catch (VkApiException e)
             {
                 _logger.Log($"Не удалось выдать редактора {user}: {e.Message}", LogType.Error);
                 continue;

@@ -1,8 +1,8 @@
 ﻿using nng.Data;
-using nng.Exceptions;
 using nng.VkFrameworks;
 using nng_server.Configs;
 using nng_server.Logging;
+using VkNet.Exception;
 
 namespace nng_server.Tasks;
 
@@ -45,13 +45,13 @@ public class DogsServer : ServerTask
 
     private void DeleteDog(long group, long user)
     {
-        _framework.SetSecondsToWait(3600);
+        VkFramework.CaptchaSecondsToWait = 3600;
         try
         {
             _framework.EditManager(user, group, null);
             _logger.Log($"Сняли редактора {user} в сообществе {group}");
         }
-        catch (VkFrameworkMethodException e)
+        catch (VkApiException e)
         {
             _logger.Log($"Невозможно удалить {user} из сообщества {group}", LogType.Error);
             _logger.Log($"{e.GetType()}: {e.Message}\n{e.StackTrace}", LogType.Error);
