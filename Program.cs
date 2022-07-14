@@ -31,7 +31,14 @@ public static class Program
                 return true;
             });
 
+            var status = new StatusServer(vk, () =>
+            {
+                Task.Delay(TimeSpan.FromDays(5)).GetAwaiter().GetResult();
+                return true;
+            });
+
             new Thread(dogs.Start).Start();
+            new Thread(status.Start).Start();
             editor.Start();
         }
     }
