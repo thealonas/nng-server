@@ -16,6 +16,7 @@ public class StatusServer : ServerTask
 
     public override void Start()
     {
+        UpdateData();
         var groups = Data.GroupList.ToList();
         for (var i = 0; i < groups.Count; i++)
         {
