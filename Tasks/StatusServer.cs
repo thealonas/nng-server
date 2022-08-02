@@ -22,7 +22,7 @@ public class StatusServer : ServerTask
         {
             var group = groups[i];
 
-            if (groups.Count.Equals(i) && _vkFramework.GetGroupData(group).AllUsers.Count < 100)
+            if (i + 1 == groups.Count && _vkFramework.GetGroupData(group).AllUsers.Count < 100)
             {
                 _vkFramework.SetGroupStatus(group, "редактор после 50 и 100 подписчиков (или через бота)");
                 _logContext.Log($"Установили статус в {group}: редактор после 50 и 100 подписчиков (или через бота)");
