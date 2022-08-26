@@ -1,12 +1,10 @@
-﻿using nng.Constants;
-using nng.Data;
+﻿using nng_server.Configs;
+using nng_server.Logging;
+using nng.Helpers;
 using nng.Models;
 using nng.VkFrameworks;
-using nng_server.Configs;
-using nng_server.Logging;
 using VkNet.Enums.SafetyEnums;
 using VkNet.Exception;
-using VkNet.Model.RequestParams;
 
 namespace nng_server.Tasks;
 
@@ -81,27 +79,12 @@ public class EditorServer : ServerTask
     {
         var counter = 0;
         _logger.Log($"Группа: {_group}");
-        for (var index = 0; index < _groupData.AllUsers.Count; index++)
+        foreach (var user in _groupData.AllUsers.Where(user => !IsManager(user.Id)))
         {
-            var user = _groupData.AllUsers[index];
-            if (IsManager(user.Id)) continue;
             try
             {
-                VkFrameworkExecution.Execute(() => _vkFramework.Api.Groups.EditManager(new GroupsEditManagerParams
-                {
-                    UserId = user.Id,
-                    GroupId = _group,
-                    Role = ManagerRole.Editor
-                }), false);
-
+                _vkFramework.EditManager(user.Id, _group, ManagerRole.Editor);
                 _logger.Log($"Выдали редактора {user}");
-            }
-            catch (CaptchaNeededException)
-            {
-                _logger.Log($"Каптча! Ожидаем {Constants.CaptchaEditorWaitTime.TotalMinutes} минут",
-                    LogType.Warning);
-                Thread.Sleep(Constants.CaptchaEditorWaitTime);
-                index--;
             }
             catch (VkApiException e)
             {
