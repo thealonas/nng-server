@@ -1,19 +1,27 @@
 ﻿using nng_server.Configs;
 using nng.Helpers;
+using nng.Logging;
 using nng.Models;
+using nng.Services;
+using nng.VkFrameworks;
 
 namespace nng_server.Tasks;
 
 public class ServerTask
 {
     private readonly Config _config = ConfigurationManager.Configuration;
-    private readonly Func<bool> _finish;
-    protected DataModel Data = null!;
+    private protected readonly VkFramework Framework;
+    private protected readonly Logger Logger;
+    private protected DataModel Data = null!;
 
-    protected ServerTask(Func<bool> finish)
+    protected ServerTask(string name, ProgramInformationService info, VkFramework framework, TimeSpan interval)
     {
-        _finish = finish;
+        Logger = new Logger(info, name);
+        Framework = framework;
+        Interval = interval;
     }
+
+    public TimeSpan Interval { get; }
 
     public virtual void Start()
     {
@@ -21,15 +29,6 @@ public class ServerTask
 
     protected virtual void UpdateData()
     {
-        Data = DataHelper.GetData(_config.DataUrl);
-    }
-
-    private protected void Finished()
-    {
-        var repeat = _finish();
-        if (!repeat) return;
-
-        UpdateData();
-        Start();
+        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
     }
 }

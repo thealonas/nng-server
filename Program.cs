@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using nng_server.Configs;
 using nng_server.Tasks;
+using nng.Services;
 using nng.VkFrameworks;
 using Sentry;
 
@@ -8,7 +9,7 @@ namespace nng_server;
 
 public static class Program
 {
-    public static void Main()
+    public static async Task Main()
     {
         var config = ConfigurationManager.Configuration;
         using (SentrySdk.Init(options =>
@@ -22,24 +23,21 @@ public static class Program
             Console.InputEncoding = Encoding.Unicode;
 
             var vk = new VkFramework(config.Token);
+            var version = typeof(Program).Assembly.GetName().Version;
+            var info = new ProgramInformationService(version ?? throw new ArgumentNullException(nameof(version)),
+                false);
 
-            var editor = new EditorServer(vk, () => true);
-
-            var dogs = new DogsServer(vk, () =>
+            var tasks = new List<ServerTask>
             {
-                Task.Delay(TimeSpan.FromDays(7)).GetAwaiter().GetResult();
-                return true;
-            });
+                new StatusServer(info, vk),
+                new DogsServer(info, vk),
+                new EditorServer(info, vk),
+                new BanServer(info, vk)
+            };
 
-            var status = new StatusServer(vk, () =>
-            {
-                Task.Delay(TimeSpan.FromDays(5)).GetAwaiter().GetResult();
-                return true;
-            });
-
-            new Thread(dogs.Start).Start();
-            new Thread(status.Start).Start();
-            editor.Start();
+            var manager = new TaskManager(info, tasks);
+            var cts = new CancellationTokenSource().Token;
+            await manager.RunTasks(cts);
         }
     }
 }

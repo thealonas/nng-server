@@ -1,17 +1,13 @@
-﻿using nng_server.Logging;
+﻿using nng.Services;
 using nng.VkFrameworks;
 
 namespace nng_server.Tasks;
 
 public class StatusServer : ServerTask
 {
-    private readonly LogContext _logContext;
-    private readonly VkFramework _vkFramework;
-
-    public StatusServer(VkFramework vkFramework, Func<bool> finish) : base(finish)
+    public StatusServer(ProgramInformationService info, VkFramework framework) : base(nameof(StatusServer), info,
+        framework, TimeSpan.FromDays(3))
     {
-        _vkFramework = vkFramework;
-        _logContext = new LogContext(nameof(StatusServer));
     }
 
     public override void Start()
@@ -22,17 +18,15 @@ public class StatusServer : ServerTask
         {
             var group = groups[i];
 
-            if (i + 1 == groups.Count && _vkFramework.GetGroupData(group).AllUsers.Count < 100)
+            if (i + 1 == groups.Count && Framework.GetGroupData(group).AllUsers.Count < 100)
             {
-                _vkFramework.SetGroupStatus(group, "редактор после 50 и 100 подписчиков (или через бота)");
-                _logContext.Log($"Установили статус в {group}: редактор после 50 и 100 подписчиков (или через бота)");
+                Framework.SetGroupStatus(group, "редактор после 50 и 100 подписчиков (или через бота)");
+                Logger.Log($"Установили статус в {group}: редактор после 50 и 100 подписчиков (или через бота)");
                 return;
             }
 
-            _logContext.Log($"Очистили статус в {group}");
-            _vkFramework.SetGroupStatus(group, string.Empty);
+            Logger.Log($"Очистили статус в {group}");
+            Framework.SetGroupStatus(group, string.Empty);
         }
-
-        Finished();
     }
 }

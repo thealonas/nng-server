@@ -16,7 +16,6 @@ public class Config
     public string DataUrl { get; }
     public string Token { get; }
     public int UpdateTimeInMinutes { get; }
-
     public string SentryEnvironment { get; }
 }
 

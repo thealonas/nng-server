@@ -1,7 +1,8 @@
 ﻿using nng_server.Configs;
-using nng_server.Logging;
+using nng.Enums;
 using nng.Helpers;
 using nng.Models;
+using nng.Services;
 using nng.VkFrameworks;
 using VkNet.Enums.SafetyEnums;
 using VkNet.Exception;
@@ -11,34 +12,32 @@ namespace nng_server.Tasks;
 public class EditorServer : ServerTask
 {
     private readonly Config _config;
-    private readonly LogContext _logger;
     private readonly List<int> _processedGroups;
-    private readonly VkFramework _vkFramework;
     private int _group;
     private GroupData _groupData;
 
-    public EditorServer(VkFramework vkFramework, Func<bool> finished) : base(finished)
+    public EditorServer(ProgramInformationService info, VkFramework framework) : base(nameof(EditorServer), info,
+        framework, TimeSpan.FromDays(5))
     {
         _processedGroups = new List<int>();
-        _vkFramework = vkFramework;
-        _logger = new LogContext(nameof(EditorServer));
-
         _config = ConfigurationManager.Configuration;
-        Data = DataHelper.GetData(_config.DataUrl);
+
+        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
+
         _group = GetGroup(Data);
     }
 
     public override void Start()
     {
-        Data = DataHelper.GetData(_config.DataUrl);
+        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
         var exit = false;
         while (!exit)
             try
             {
-                _groupData = _vkFramework.GetGroupData(_group);
+                _groupData = Framework.GetGroupData(_group);
                 if (_groupData.Managers.Count >= _groupData.AllUsers.Count)
                 {
-                    _logger.Log($"Все пользователи в группе {_group} менеджеры");
+                    Logger.Log($"Все пользователи в группе {_group} менеджеры");
                     exit = true;
                     continue;
                 }
@@ -46,27 +45,23 @@ public class EditorServer : ServerTask
                 switch (_groupData.AllUsers.Count)
                 {
                     case < 54:
-                        _logger.Log($"В группе {_group} меньше 54 человек ({_groupData.AllUsers.Count}), " +
-                                    $"ждем {_config.UpdateTimeInMinutes} минут…");
-                        Thread.Sleep(_config.UpdateTimeInMinutes * 60 * 1000);
-                        continue;
+                        Logger.Log($"В группе {_group} меньше 54 человек ({_groupData.AllUsers.Count})");
+                        return;
                     case < 100:
-                        _logger.Log($"Начинаем выдачу в группе {_group}…");
+                        Logger.Log($"Начинаем выдачу в группе {_group}…");
                         GiveEditor();
                         exit = true;
                         continue;
                     case >= 100:
-                        _logger.Log($"В группе {_group} больше 100 человек, процесс завершен");
+                        Logger.Log($"В группе {_group} больше 100 человек, процесс завершен");
                         exit = true;
                         continue;
                 }
             }
             catch (Exception e)
             {
-                _logger.Log($"{e.GetType()}: {e.Message}", LogType.Error);
+                Logger.Log($"{e.GetType()}: {e.Message}", LogType.Error);
             }
-
-        Finished();
     }
 
     protected override void UpdateData()
@@ -78,25 +73,24 @@ public class EditorServer : ServerTask
     private void GiveEditor()
     {
         var counter = 0;
-        _logger.Log($"Группа: {_group}");
+        Logger.Log($"Группа: {_group}");
         foreach (var user in _groupData.AllUsers.Where(user => !IsManager(user.Id)))
         {
             try
             {
-                _vkFramework.EditManager(user.Id, _group, ManagerRole.Editor);
-                _logger.Log($"Выдали редактора {user}");
+                Framework.EditManager(user.Id, _group, ManagerRole.Editor);
+                Logger.Log($"Выдали редактора {user}");
             }
             catch (VkApiException e)
             {
-                _logger.Log($"Не удалось выдать редактора {user}: {e.Message}", LogType.Error);
+                Logger.Log($"Не удалось выдать редактора {user}: {e.Message}", LogType.Error);
                 continue;
             }
 
             counter++;
         }
 
-        _logger.Log("Процесс выдачи завершен, выдано редакторов: " + counter);
-        Finished();
+        Logger.Log("Процесс выдачи завершен, выдано редакторов: " + counter);
     }
 
     private bool IsManager(long user)
@@ -117,13 +111,13 @@ public class EditorServer : ServerTask
         }
         catch (InvalidOperationException)
         {
-            _logger.Log("Все сообщества были обработаны…");
-            _logger.Log("Пауза на 5 дней");
+            Logger.Log("Все сообщества были обработаны…");
+            Logger.Log("Пауза на 5 дней");
             _processedGroups.Clear();
 
             Thread.Sleep(TimeSpan.FromDays(5));
 
-            _logger.Log("Проходимся по списку еще раз…");
+            Logger.Log("Проходимся по списку еще раз…");
             return GetGroup(data);
         }
     }
