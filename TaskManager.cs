@@ -3,6 +3,7 @@ using nng_server.Tasks;
 using nng.Enums;
 using nng.Logging;
 using nng.Services;
+using Sentry;
 
 namespace nng_server;
 
@@ -21,18 +22,18 @@ public class TaskManager
         _tasks.AddRange(tasks);
     }
 
-    public async Task RunTasks(CancellationToken token)
+    public void RunTasks(CancellationToken token)
     {
-        _tasks.ForEach(RunTask);
+        foreach (var st in _tasks) RunTask(st);
 
         while (!token.IsCancellationRequested)
         {
-            var task = await SleepUntilNextTask();
+            var task = SleepUntilNextTask();
             RunTask(task);
         }
     }
 
-    private async Task<ServerTask> SleepUntilNextTask()
+    private ServerTask SleepUntilNextTask()
     {
         var min = TimeSpan.MaxValue;
         var now = DateTime.Now;
@@ -53,7 +54,7 @@ public class TaskManager
         if (min.CompareTo(TimeSpan.Zero) > 0)
         {
             _logger.Log($"Ждем {GetHumanReadableInfo(min)}…", LogType.Warning);
-            await Task.Delay(min);
+            Task.Delay(min).GetAwaiter().GetResult();
         }
 
         return (ServerTask) targetTask;
@@ -63,7 +64,16 @@ public class TaskManager
     {
         var name = task.GetType().Name;
         _logger.Log($"Запускаем задачу «{name}»", LogType.Warning);
-        task.Start();
+        try
+        {
+            task.Start();
+        }
+        catch (Exception e)
+        {
+            _logger.Log($"Ошибка при выполнении задачи {task.GetType().Name}", LogType.Error);
+            _logger.Log(e);
+            SentrySdk.CaptureException(e);
+        }
 
         if (_lastRun.ContainsKey(task)) _lastRun[task] = DateTime.Now;
         else _lastRun.Add(task, DateTime.Now);

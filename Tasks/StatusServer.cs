@@ -1,4 +1,5 @@
-﻿using nng.Services;
+﻿using nng.Constants;
+using nng.Services;
 using nng.VkFrameworks;
 
 namespace nng_server.Tasks;
@@ -12,6 +13,8 @@ public class StatusServer : ServerTask
 
     public override void Start()
     {
+        VkFramework.CaptchaSecondsToWait = Constants.CaptchaEditorWaitTime;
+
         UpdateData();
         var groups = Data.GroupList.ToList();
         for (var i = 0; i < groups.Count; i++)
@@ -25,8 +28,8 @@ public class StatusServer : ServerTask
                 return;
             }
 
-            Logger.Log($"Очистили статус в {group}");
             Framework.SetGroupStatus(group, string.Empty);
+            Logger.Log($"Очистили статус в {group}");
         }
     }
 }

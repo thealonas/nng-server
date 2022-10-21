@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using nng_server.Configs;
 using nng_server.Tasks;
+using nng.Enums;
+using nng.Logging;
 using nng.Services;
 using nng.VkFrameworks;
 using Sentry;
@@ -9,7 +11,9 @@ namespace nng_server;
 
 public static class Program
 {
-    public static async Task Main()
+    private static Logger? _mainLogger;
+
+    public static void Main()
     {
         var config = ConfigurationManager.Configuration;
         using (SentrySdk.Init(options =>
@@ -27,6 +31,10 @@ public static class Program
             var info = new ProgramInformationService(version ?? throw new ArgumentNullException(nameof(version)),
                 false);
 
+            _mainLogger = new Logger(info, "nng server");
+
+            VkFramework.OnCaptchaWait += HandleCaptcha;
+
             var tasks = new List<ServerTask>
             {
                 new StatusServer(info, vk),
@@ -37,7 +45,15 @@ public static class Program
 
             var manager = new TaskManager(info, tasks);
             var cts = new CancellationTokenSource().Token;
-            await manager.RunTasks(cts);
+            manager.RunTasks(cts);
+
+            VkFramework.OnCaptchaWait -= HandleCaptcha;
         }
+    }
+
+    private static void HandleCaptcha(object? sender, CaptchaEventArgs captchaEventArgs)
+    {
+        _mainLogger?.Log($"Каптча! Ждем {captchaEventArgs.SecondsToWait.TotalSeconds} секунд…",
+            LogType.Warning, force: true);
     }
 }

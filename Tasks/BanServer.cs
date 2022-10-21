@@ -1,4 +1,5 @@
 ﻿using nng_server.Configs;
+using nng.Constants;
 using nng.Enums;
 using nng.Helpers;
 using nng.Services;
@@ -10,8 +11,6 @@ namespace nng_server.Tasks;
 
 public class BanServer : ServerTask
 {
-    private const string BanComment = "Блокировка после решения Администрации | По вопросам: https://vk.me/mralonas";
-
     private readonly Config _config;
     private readonly List<long> _usersFailedToBan = new();
 
@@ -28,9 +27,11 @@ public class BanServer : ServerTask
 
     public override void Start()
     {
+        VkFramework.CaptchaSecondsToWait = Constants.CaptchaBlockWaitTime;
+
         Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
 
-        var bannedUsers = Data.Users.Where(x => x.Deleted is null).Select(x => x.Id).ToList();
+        var bannedUsers = Data.Users.Where(x => !x.Deleted).Select(x => x.Id).ToList();
         foreach (var group in Data.GroupList)
         {
             var banned = Framework.GetBannedAlt(group).ToList();
@@ -65,7 +66,7 @@ public class BanServer : ServerTask
             foreach (var (group, users) in _usersThatShouldBeBanned)
             {
                 Logger.Log($"Переходим к сообществу {group}");
-                ProcessUsersBan(group, users, BanComment);
+                ProcessUsersBan(group, users, _config.BanComment);
             }
         }
         else
@@ -93,7 +94,7 @@ public class BanServer : ServerTask
             foreach (var (group, users) in _usersWithWrongBanReason)
             {
                 Logger.Log($"Переходим к сообществу {group}");
-                ProcessUsersBan(group, users.ToDictionary(x => x, x => true), BanComment);
+                ProcessUsersBan(group, users.ToDictionary(x => x, x => true), _config.BanComment);
             }
         }
         else
@@ -125,7 +126,6 @@ public class BanServer : ServerTask
 
     private void BanUser(long user, long group, string banReason)
     {
-        VkFramework.CaptchaSecondsToWait = 10;
         try
         {
             Framework.Block(group, user, banReason);
@@ -141,7 +141,6 @@ public class BanServer : ServerTask
 
     private void FireEditor(long user, long group)
     {
-        VkFramework.CaptchaSecondsToWait = 3600;
         try
         {
             Framework.EditManager(user, group, null);
@@ -156,7 +155,6 @@ public class BanServer : ServerTask
 
     private void UnblockUser(long user, long group)
     {
-        VkFramework.CaptchaSecondsToWait = 10;
         try
         {
             Framework.UnBlock(group, user);
@@ -191,6 +189,6 @@ public class BanServer : ServerTask
 
     private IEnumerable<long> GetUsersWithWrongReason(IReadOnlyCollection<GetBannedResult> banned)
     {
-        return banned.Where(x => x.BanInfo.Comment != BanComment).Select(x => x.Profile.Id);
+        return banned.Where(x => x.BanInfo.Comment != _config.BanComment).Select(x => x.Profile.Id);
     }
 }

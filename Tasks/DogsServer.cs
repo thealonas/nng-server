@@ -1,4 +1,5 @@
 ﻿using nng_server.Configs;
+using nng.Constants;
 using nng.Enums;
 using nng.Helpers;
 using nng.Services;
@@ -20,6 +21,7 @@ public class DogsServer : ServerTask
 
     public override void Start()
     {
+        VkFramework.CaptchaSecondsToWait = Constants.CaptchaBlockWaitTime;
         foreach (var group in _groups)
         {
             Logger.Log($"Переходим к сообществу {group}");
@@ -42,7 +44,6 @@ public class DogsServer : ServerTask
 
     private void DeleteDog(long group, long user)
     {
-        VkFramework.CaptchaSecondsToWait = 3600;
         try
         {
             Framework.EditManager(user, group, null);

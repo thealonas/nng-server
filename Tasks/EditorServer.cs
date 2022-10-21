@@ -1,4 +1,5 @@
 ﻿using nng_server.Configs;
+using nng.Constants;
 using nng.Enums;
 using nng.Helpers;
 using nng.Models;
@@ -29,6 +30,7 @@ public class EditorServer : ServerTask
 
     public override void Start()
     {
+        VkFramework.CaptchaSecondsToWait = Constants.CaptchaEditorWaitTime;
         Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
         var exit = false;
         while (!exit)

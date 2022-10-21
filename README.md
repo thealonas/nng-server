@@ -17,3 +17,4 @@
 * `DataURL` — Ссылка на [общий список](https://github.com/MrAlonas/nng#datajson)
 * `UserToken` — Токен страницы, от которой выполняются действия
 * `UpdateTimeInMinutes` **(10)** —  Интервал проверки последней группы
+* `BanComment` — Комментарий при блокировке пользователя
