@@ -1,4 +1,5 @@
 ﻿using nng_server.Configs;
+using nng_server.Interfaces;
 using nng.Helpers;
 using nng.Logging;
 using nng.Models;
@@ -14,20 +15,21 @@ public class ServerTask
     private protected readonly Logger Logger;
     private protected DataModel Data = null!;
 
-    protected ServerTask(string name, ProgramInformationService info, VkFramework framework, TimeSpan interval)
+    public ServerTask(string name, ProgramInformationService info, VkFramework framework, IUpdatable interval)
     {
         Logger = new Logger(info, name);
         Framework = framework;
         Interval = interval;
     }
 
-    public TimeSpan Interval { get; }
+    public IUpdatable Interval { get; }
 
     public virtual void Start()
     {
+        UpdateData();
     }
 
-    protected virtual void UpdateData()
+    private void UpdateData()
     {
         Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
     }

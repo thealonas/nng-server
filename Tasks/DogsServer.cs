@@ -1,7 +1,6 @@
-﻿using nng_server.Configs;
+﻿using nng_server.Intervals;
 using nng.Constants;
 using nng.Enums;
-using nng.Helpers;
 using nng.Services;
 using nng.VkFrameworks;
 using VkNet.Exception;
@@ -10,19 +9,17 @@ namespace nng_server.Tasks;
 
 public class DogsServer : ServerTask
 {
-    private readonly Config _config = ConfigurationManager.Configuration;
-    private long[] _groups;
-
     public DogsServer(ProgramInformationService info, VkFramework framework) : base(nameof(DogsServer), info, framework,
-        TimeSpan.FromDays(7))
+        new DelayInterval(TimeSpan.FromDays(7)))
     {
-        _groups = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult().GroupList;
     }
 
     public override void Start()
     {
+        base.Start();
+
         VkFramework.CaptchaSecondsToWait = Constants.CaptchaBlockWaitTime;
-        foreach (var group in _groups)
+        foreach (var group in Data.GroupList)
         {
             Logger.Log($"Переходим к сообществу {group}");
             var members = Framework.GetGroupData(group);
@@ -33,13 +30,6 @@ public class DogsServer : ServerTask
 
         Logger.Log("Все сообщества были обработаны…");
         Logger.Log("Пауза на 7 дней");
-    }
-
-    protected override void UpdateData()
-    {
-        base.UpdateData();
-
-        _groups = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult().GroupList;
     }
 
     private void DeleteDog(long group, long user)

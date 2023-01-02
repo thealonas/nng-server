@@ -1,4 +1,5 @@
 ﻿using nng_server.Configs;
+using nng_server.Intervals;
 using nng.Constants;
 using nng.Enums;
 using nng.Helpers;
@@ -19,7 +20,7 @@ public class BanServer : ServerTask
     private readonly Dictionary<long, List<long>> _usersWithWrongBanReason = new();
 
     public BanServer(ProgramInformationService info, VkFramework framework) : base(nameof(BanServer), info, framework,
-        TimeSpan.FromDays(21))
+        new DelayInterval(TimeSpan.FromDays(2)))
     {
         _config = ConfigurationManager.Configuration;
         Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
@@ -27,21 +28,29 @@ public class BanServer : ServerTask
 
     public override void Start()
     {
+        base.Start();
+
+        ClearAll();
+
         VkFramework.CaptchaSecondsToWait = Constants.CaptchaBlockWaitTime;
 
-        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
-
-        var bannedUsers = Data.Users.Where(x => !x.Deleted).Select(x => x.Id).ToList();
+        var targetUsers = Data.Users.Where(x => !x.Deleted).Select(x => x.Id).ToList();
         foreach (var group in Data.GroupList)
         {
-            var banned = Framework.GetBannedAlt(group).ToList();
-            var users = banned.Select(x => x.Profile).ToList();
+            var bannedResult = Framework.GetBannedAlt(group).ToList();
+
+            var currentBannedUsers = bannedResult.Select(x => x.Profile).ToList();
+
             var managers = Framework.GetGroupData(group).Managers.ToList();
-            var shouldBeBanned =
-                GetUsersThatShouldBeBanned(bannedUsers, users, managers.Select(x => x.Id).ToList()).ToList();
-            var shouldNotBeBanned = GetUsersThatShouldNotBeBanned(bannedUsers, users).ToList();
-            var withWrongBanReason =
-                GetUsersWithWrongReason(banned).Where(x => !shouldNotBeBanned.Contains(x)).ToList();
+
+            var shouldBeBanned = GetUsersThatShouldBeBanned(targetUsers,
+                currentBannedUsers, managers.Select(x => x.Id).ToList()).ToList();
+
+            var shouldNotBeBanned = GetUsersThatShouldNotBeBanned(targetUsers, currentBannedUsers)
+                .ToList();
+
+            var withWrongBanReason = GetUsersWithWrongReason(bannedResult)
+                .Where(x => !shouldNotBeBanned.Contains(x)).ToList();
 
             if (shouldBeBanned.Count > 0)
                 _usersThatShouldBeBanned.Add(group, shouldBeBanned.ToDictionary(x => x.Key, x => x.Value));
@@ -167,10 +176,10 @@ public class BanServer : ServerTask
         }
     }
 
-    private Dictionary<long, bool> GetUsersThatShouldBeBanned(IEnumerable<long> bannedUsers,
-        IEnumerable<User> currentBannedUsers, ICollection<long> managers)
+    private Dictionary<long, bool> GetUsersThatShouldBeBanned(IEnumerable<long> targetUsers,
+        IEnumerable<User> actuallyBannedUsers, ICollection<long> managers)
     {
-        var targetsToBan = bannedUsers.Where(x => currentBannedUsers.All(y => y.Id != x)).ToList();
+        var targetsToBan = targetUsers.Where(x => actuallyBannedUsers.All(y => y.Id.Equals(x))).ToList();
         var output = new Dictionary<long, bool>();
         foreach (var target in targetsToBan)
         {
@@ -184,11 +193,19 @@ public class BanServer : ServerTask
     private IEnumerable<long> GetUsersThatShouldNotBeBanned(IEnumerable<long> bannedUsers,
         IEnumerable<User> currentBannedUsers)
     {
-        return currentBannedUsers.Where(x => bannedUsers.All(y => y != x.Id)).Select(x => x.Id).ToList();
+        return currentBannedUsers.Where(x => bannedUsers.All(y => !y.Equals(x.Id))).Select(x => x.Id).ToList();
     }
 
-    private IEnumerable<long> GetUsersWithWrongReason(IReadOnlyCollection<GetBannedResult> banned)
+    private IEnumerable<long> GetUsersWithWrongReason(IEnumerable<GetBannedResult> banned)
     {
         return banned.Where(x => x.BanInfo.Comment != _config.BanComment).Select(x => x.Profile.Id);
+    }
+
+    private void ClearAll()
+    {
+        _usersFailedToBan.Clear();
+        _usersThatShouldBeBanned.Clear();
+        _usersThatShouldBeUnbanned.Clear();
+        _usersWithWrongBanReason.Clear();
     }
 }

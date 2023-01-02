@@ -1,7 +1,6 @@
-﻿using nng_server.Configs;
+﻿using nng_server.Intervals;
 using nng.Constants;
 using nng.Enums;
-using nng.Helpers;
 using nng.Models;
 using nng.Services;
 using nng.VkFrameworks;
@@ -10,37 +9,33 @@ using VkNet.Exception;
 
 namespace nng_server.Tasks;
 
-public class EditorServer : ServerTask
+public sealed class EditorServer : ServerTask
 {
-    private readonly Config _config;
-    private readonly List<int> _processedGroups;
-    private int _group;
+    private bool _exit;
+    private long _group;
     private GroupData _groupData;
 
     public EditorServer(ProgramInformationService info, VkFramework framework) : base(nameof(EditorServer), info,
-        framework, TimeSpan.FromDays(5))
+        framework, new DelayInterval(TimeSpan.FromDays(5)))
     {
-        _processedGroups = new List<int>();
-        _config = ConfigurationManager.Configuration;
-
-        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
-
-        _group = GetGroup(Data);
     }
 
     public override void Start()
     {
+        base.Start();
+
+        _group = GetGroup();
+
         VkFramework.CaptchaSecondsToWait = Constants.CaptchaEditorWaitTime;
-        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
-        var exit = false;
-        while (!exit)
+
+        while (!_exit)
             try
             {
                 _groupData = Framework.GetGroupData(_group);
                 if (_groupData.Managers.Count >= _groupData.AllUsers.Count)
                 {
                     Logger.Log($"Все пользователи в группе {_group} менеджеры");
-                    exit = true;
+                    _exit = true;
                     continue;
                 }
 
@@ -52,11 +47,11 @@ public class EditorServer : ServerTask
                     case < 100:
                         Logger.Log($"Начинаем выдачу в группе {_group}…");
                         GiveEditor();
-                        exit = true;
+                        _exit = true;
                         continue;
                     case >= 100:
                         Logger.Log($"В группе {_group} больше 100 человек, процесс завершен");
-                        exit = true;
+                        _exit = true;
                         continue;
                 }
             }
@@ -66,31 +61,20 @@ public class EditorServer : ServerTask
             }
     }
 
-    protected override void UpdateData()
-    {
-        base.UpdateData();
-        _group = GetGroup(Data);
-    }
-
     private void GiveEditor()
     {
         var counter = 0;
-        Logger.Log($"Группа: {_group}");
         foreach (var user in _groupData.AllUsers.Where(user => !IsManager(user.Id)))
-        {
             try
             {
                 Framework.EditManager(user.Id, _group, ManagerRole.Editor);
-                Logger.Log($"Выдали редактора {user}");
+                Logger.Log($"Выдали редактора {user.Id}");
+                counter++;
             }
             catch (VkApiException e)
             {
-                Logger.Log($"Не удалось выдать редактора {user}: {e.Message}", LogType.Error);
-                continue;
+                Logger.Log($"Не удалось выдать редактора {user.Id}: {e.Message}", LogType.Error);
             }
-
-            counter++;
-        }
 
         Logger.Log("Процесс выдачи завершен, выдано редакторов: " + counter);
     }
@@ -100,27 +84,9 @@ public class EditorServer : ServerTask
         return _groupData.Managers.Any(x => x.Id == user);
     }
 
-    private int GetGroup(DataModel data)
+    private long GetGroup()
     {
-        try
-        {
-            var group = (int) data.GroupList.Reverse().First();
-
-            if (_processedGroups.Contains(group)) throw new InvalidOperationException();
-
-            _processedGroups.Add(group);
-            return group;
-        }
-        catch (InvalidOperationException)
-        {
-            Logger.Log("Все сообщества были обработаны…");
-            Logger.Log("Пауза на 5 дней");
-            _processedGroups.Clear();
-
-            Thread.Sleep(TimeSpan.FromDays(5));
-
-            Logger.Log("Проходимся по списку еще раз…");
-            return GetGroup(data);
-        }
+        var group = Data.GroupList.Reverse().First();
+        return group;
     }
 }

@@ -1,4 +1,5 @@
-﻿using nng.Constants;
+﻿using nng_server.Intervals;
+using nng.Constants;
 using nng.Services;
 using nng.VkFrameworks;
 
@@ -7,15 +8,16 @@ namespace nng_server.Tasks;
 public class StatusServer : ServerTask
 {
     public StatusServer(ProgramInformationService info, VkFramework framework) : base(nameof(StatusServer), info,
-        framework, TimeSpan.FromDays(3))
+        framework, new DelayInterval(TimeSpan.FromDays(3)))
     {
     }
 
     public override void Start()
     {
+        base.Start();
+
         VkFramework.CaptchaSecondsToWait = Constants.CaptchaEditorWaitTime;
 
-        UpdateData();
         var groups = Data.GroupList.ToList();
         for (var i = 0; i < groups.Count; i++)
         {

@@ -1,11 +1,12 @@
 ﻿using System.Text;
+using nng_server.Intervals;
 using nng_server.Tasks;
 using nng.Enums;
 using nng.Logging;
 using nng.Services;
 using Sentry;
 
-namespace nng_server;
+namespace nng_server.Managers;
 
 public class TaskManager
 {
@@ -24,11 +25,27 @@ public class TaskManager
 
     public void RunTasks(CancellationToken token)
     {
-        foreach (var st in _tasks) RunTask(st);
+        TimeDataManager.CleanUp();
+
+        foreach (var task in _tasks.Where(task => task.IsAllowedToRun()))
+        {
+            if (!task.Interval.UpdateAtStartup)
+            {
+                _logger.Log($"Задача {task.GetType().Name} зарегестрирована на отложенный запуск через " +
+                            $"{task.Interval.WaitTime.TotalHours} часов", LogType.Warning);
+
+                _lastRun[task] = DateTime.Now;
+
+                continue;
+            }
+
+            RunTask(task);
+        }
 
         while (!token.IsCancellationRequested)
         {
             var task = SleepUntilNextTask();
+
             RunTask(task);
         }
     }
@@ -36,11 +53,11 @@ public class TaskManager
     private ServerTask SleepUntilNextTask()
     {
         var min = TimeSpan.MaxValue;
-        var now = DateTime.Now;
         var targetTask = new object();
+
         foreach (var (task, time) in _lastRun)
         {
-            var target = time.Add(task.Interval) - now;
+            var target = time.Add(task.Interval.WaitTime).TimeOfDay;
 
             if (target >= min) continue;
 
@@ -49,11 +66,13 @@ public class TaskManager
         }
 
         var name = targetTask.GetType().Name;
+
         _logger.Log($"Следущая задача: {name}", LogType.Warning);
 
         if (min.CompareTo(TimeSpan.Zero) > 0)
         {
             _logger.Log($"Ждем {GetHumanReadableInfo(min)}…", LogType.Warning);
+
             Task.Delay(min).GetAwaiter().GetResult();
         }
 
@@ -62,7 +81,10 @@ public class TaskManager
 
     private void RunTask(ServerTask task)
     {
+        TimeDataManager.CleanUp();
+
         var name = task.GetType().Name;
+
         _logger.Log($"Запускаем задачу «{name}»", LogType.Warning);
         try
         {
@@ -71,14 +93,17 @@ public class TaskManager
         catch (Exception e)
         {
             _logger.Log($"Ошибка при выполнении задачи {task.GetType().Name}", LogType.Error);
-            _logger.Log(e);
+            _logger.Log($"{e.GetType()}: {e.Message}\n{e.StackTrace}", LogType.Error);
+
             SentrySdk.CaptureException(e);
         }
 
-        if (_lastRun.ContainsKey(task)) _lastRun[task] = DateTime.Now;
-        else _lastRun.Add(task, DateTime.Now);
+        _lastRun[task] = DateTime.Now;
 
-        _logger.Log($"Задача «{name}» запустится через {GetHumanReadableInfo(task.Interval)}", LogType.Warning);
+        if (task.Interval is DelayInterval interval) task.AddTask(DateTime.Now, interval);
+
+        _logger.Log($"Задача «{name}» запустится через {GetHumanReadableInfo(task.Interval.WaitTime)}",
+            LogType.Warning);
     }
 
     private static string GetHumanReadableInfo(TimeSpan span)

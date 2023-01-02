@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using nng_server.Configs;
+using nng_server.Managers;
 using nng_server.Tasks;
 using nng.Enums;
 using nng.Logging;
@@ -39,6 +40,8 @@ public static class Program
             {
                 new StatusServer(info, vk),
                 new DogsServer(info, vk),
+                new RepostServer(info, vk),
+                new CleanServer(info, vk),
                 new EditorServer(info, vk),
                 new BanServer(info, vk)
             };
