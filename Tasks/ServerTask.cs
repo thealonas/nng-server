@@ -1,8 +1,7 @@
-﻿using nng_server.Configs;
+﻿using nng_server.Containers;
 using nng_server.Interfaces;
-using nng.Helpers;
+using nng.DatabaseProviders;
 using nng.Logging;
-using nng.Models;
 using nng.Services;
 using nng.VkFrameworks;
 
@@ -10,27 +9,30 @@ namespace nng_server.Tasks;
 
 public class ServerTask
 {
-    private readonly Config _config = ConfigurationManager.Configuration;
-    private protected readonly VkFramework Framework;
+    private readonly VkFrameworkContainer _container;
+    private readonly TokensDatabaseProvider _tokens;
     private protected readonly Logger Logger;
-    private protected DataModel Data = null!;
 
-    public ServerTask(string name, ProgramInformationService info, VkFramework framework, IUpdatable interval)
+    protected ServerTask(string name, TokensDatabaseProvider tokens, ProgramInformationService info,
+        IUpdatable interval)
     {
+        _tokens = tokens;
         Logger = new Logger(info, name);
-        Framework = framework;
         Interval = interval;
+        _container = VkFrameworkContainer.GetInstance();
     }
+
+    private protected VkFramework Framework => _container.Framework;
 
     public IUpdatable Interval { get; }
 
-    public virtual void Start()
+    private void UpdateToken()
     {
-        UpdateData();
+        _container.UpdateToken(_tokens);
     }
 
-    private void UpdateData()
+    public virtual void Start()
     {
-        Data = DataHelper.GetDataAsync(_config.DataUrl).GetAwaiter().GetResult();
+        UpdateToken();
     }
 }

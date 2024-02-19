@@ -1,5 +1,6 @@
 ﻿using nng_server.Intervals;
 using nng.Constants;
+using nng.DatabaseProviders;
 using nng.Enums;
 using nng.Models;
 using nng.Services;
@@ -11,20 +12,32 @@ namespace nng_server.Tasks;
 
 public sealed class EditorServer : ServerTask
 {
+    private readonly GroupsDatabaseProvider _groups;
+    private readonly GroupStatsDatabaseProvider _stats;
+
     private bool _exit;
     private long _group;
     private GroupData _groupData;
 
-    public EditorServer(ProgramInformationService info, VkFramework framework) : base(nameof(EditorServer), info,
-        framework, new DelayInterval(TimeSpan.FromDays(5)))
+    public EditorServer(ProgramInformationService info, TokensDatabaseProvider tokens, GroupsDatabaseProvider groups,
+        GroupStatsDatabaseProvider stats) : base(nameof(EditorServer), tokens, info,
+        new DelayInterval(TimeSpan.FromDays(5)))
     {
+        _groups = groups;
+        _stats = stats;
     }
 
     public override void Start()
     {
         base.Start();
 
-        _group = GetGroup();
+        if (!TryGetGroup(out var group))
+        {
+            Logger.Log("Все сообщества обработаны");
+            return;
+        }
+
+        _group = group;
 
         VkFramework.CaptchaSecondsToWait = Constants.CaptchaEditorWaitTime;
 
@@ -84,9 +97,27 @@ public sealed class EditorServer : ServerTask
         return _groupData.Managers.Any(x => x.Id == user);
     }
 
-    private long GetGroup()
+    private bool TryGetGroup(out long group)
     {
-        var group = Data.GroupList.Reverse().First();
-        return group;
+        group = 0;
+
+        var groups = _groups.Collection.ToList();
+        var stats = _stats.Collection.ToList();
+
+        var group50 = groups.FirstOrDefault(x => stats.Any(y =>
+            x.GroupId.Equals(y.GroupId) && y.Members < 50));
+        if (group50 is not null)
+        {
+            group = group50.GroupId;
+            return true;
+        }
+
+        var group100 = groups.FirstOrDefault(x => stats.Any(y =>
+            x.GroupId.Equals(y.GroupId) && y.Members < 100));
+
+        if (group100 is null) return false;
+
+        group = group100.GroupId;
+        return true;
     }
 }

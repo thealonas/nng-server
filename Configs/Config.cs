@@ -1,22 +1,15 @@
-﻿using nng.Constants;
-using nng.Helpers;
+﻿using nng.Helpers;
 
 namespace nng_server.Configs;
 
 public class Config
 {
-    public Config(string dataUrl, string token, string sentryEnvironment, string banComment)
+    public Config(string redisUrl)
     {
-        DataUrl = dataUrl;
-        Token = token;
-        SentryEnvironment = sentryEnvironment;
-        BanComment = banComment;
+        RedisUrl = redisUrl;
     }
 
-    public string DataUrl { get; }
-    public string Token { get; }
-    public string BanComment { get; }
-    public string SentryEnvironment { get; }
+    public string RedisUrl { get; }
 }
 
 public static class ConfigurationManager
@@ -25,11 +18,7 @@ public static class ConfigurationManager
 
     private static Config GetConfiguration()
     {
-        var dataUrl = EnvironmentHelper.GetString(EnvironmentConstants.DataUrl);
-        var token = EnvironmentHelper.GetString(EnvironmentConstants.UserToken);
-        var sentryEnvironment = EnvironmentHelper.GetString(EnvironmentConstants.Sentry, "prod");
-        var banComment = EnvironmentHelper.GetString("BanComment");
-
-        return new Config(dataUrl, token, sentryEnvironment, banComment);
+        var redisUrl = EnvironmentHelper.GetString("REDIS_URL");
+        return new Config(redisUrl);
     }
 }

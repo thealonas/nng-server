@@ -1,4 +1,4 @@
-﻿using System.Text;
+﻿using nng_server.Extensions;
 using nng_server.Intervals;
 using nng_server.Tasks;
 using nng.Enums;
@@ -32,7 +32,7 @@ public class TaskManager
             if (!task.Interval.UpdateAtStartup)
             {
                 _logger.Log($"Задача {task.GetType().Name} зарегестрирована на отложенный запуск через " +
-                            $"{task.Interval.WaitTime.TotalHours} часов", LogType.Warning);
+                            $"{task.Interval.WaitTime.ToHumanReadableString()}", LogType.Warning);
 
                 _lastRun[task] = DateTime.Now;
 
@@ -50,38 +50,15 @@ public class TaskManager
         }
     }
 
-    private ServerTask SleepUntilNextTask()
-    {
-        var min = TimeSpan.MaxValue;
-        var targetTask = new object();
-
-        foreach (var (task, time) in _lastRun)
-        {
-            var target = time.Add(task.Interval.WaitTime).TimeOfDay;
-
-            if (target >= min) continue;
-
-            min = target;
-            targetTask = task;
-        }
-
-        var name = targetTask.GetType().Name;
-
-        _logger.Log($"Следущая задача: {name}", LogType.Warning);
-
-        if (min.CompareTo(TimeSpan.Zero) > 0)
-        {
-            _logger.Log($"Ждем {GetHumanReadableInfo(min)}…", LogType.Warning);
-
-            Task.Delay(min).GetAwaiter().GetResult();
-        }
-
-        return (ServerTask) targetTask;
-    }
-
     private void RunTask(ServerTask task)
     {
         TimeDataManager.CleanUp();
+
+        if (!_tasks.Any())
+        {
+            _logger.Log("Нет задач для запуска", LogType.Error);
+            return;
+        }
 
         var name = task.GetType().Name;
 
@@ -101,22 +78,61 @@ public class TaskManager
         _lastRun[task] = DateTime.Now;
 
         if (task.Interval is DelayInterval interval) task.AddTask(DateTime.Now, interval);
-
-        _logger.Log($"Задача «{name}» запустится через {GetHumanReadableInfo(task.Interval.WaitTime)}",
-            LogType.Warning);
     }
 
-    private static string GetHumanReadableInfo(TimeSpan span)
+    private ServerTask SleepUntilNextTask()
     {
-        var sb = new StringBuilder();
-        if (span.TotalDays >= 1)
-            sb.Append($"{span.TotalDays} дней ");
-        else if (span.TotalHours > 0)
-            sb.Append($"{span.TotalHours} часов ");
-        else if (span.TotalMinutes > 0)
-            sb.Append($"{span.TotalMinutes} минут ");
-        else sb.Append($"{span.TotalSeconds} секунд ");
+        var min = DateTime.Now.Ticks + TimeSpan.FromDays(1).Ticks;
+        ServerTask? targetTask = null;
 
-        return sb.ToString();
+        foreach (var (task, time) in _lastRun)
+        {
+            var target = time.Add(task.Interval.WaitTime).Ticks;
+
+            if (target >= min) continue;
+
+            min = target;
+            targetTask = task;
+        }
+
+        if (targetTask is null)
+        {
+            var task = FindTaskWithLeastTimeToWaitFor();
+            _logger.Log($"Задача {task.GetType().Name} будет запущена через " +
+                        $"{task.Interval.WaitTime.ToHumanReadableString()}", LogType.Warning);
+            Task.Delay(task.Interval.WaitTime).GetAwaiter().GetResult();
+            return task;
+        }
+
+        var name = targetTask.GetType().Name;
+
+        _logger.Log($"Следущая задача: {name}", LogType.Warning);
+
+        var timeToWait = targetTask.Interval.WaitTime - (DateTime.Now - _lastRun[targetTask]);
+        _logger.Log($"Задача {name} будет запущена через {timeToWait.ToHumanReadableString()}", LogType.Warning);
+
+        if (timeToWait.TotalMilliseconds > 0) Task.Delay(timeToWait).GetAwaiter().GetResult();
+
+        return targetTask;
+    }
+
+    private ServerTask FindTaskWithLeastTimeToWaitFor()
+    {
+        var min = TimeSpan.MaxValue;
+        ServerTask? targetTask = null;
+
+        foreach (var task in _tasks)
+        {
+            var target = task.Interval.WaitTime;
+
+            if (target >= min) continue;
+
+            min = target;
+            targetTask = task;
+        }
+
+        if (targetTask is null) throw new Exception("Нет задач для запуска");
+
+        return targetTask;
     }
 }
